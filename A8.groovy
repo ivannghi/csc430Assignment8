@@ -10,7 +10,9 @@ class TestRunner {
             return new NumV(expr.n)
         } else if (expr instanceof StrC) {
             return new StrV(expr.str)
-        } else if (expr instanceof If) {
+        } else if (expr instanceof IdC){
+            return env.lookup(expr.x)
+        } else if (expr instanceof IfC) {
             Value testVal = interp(expr.test, env)
             if (testVal instanceof BoolV) {
                 if (testVal.bool) {
@@ -21,8 +23,10 @@ class TestRunner {
             } else {
                 throw new RuntimeException("Expected boolean value for test expression")
             }
-        } else if (expr instanceof IdC) {
-            return env.lookup(expr.x)
+        } else if (expr instanceof LamC){
+            return new CloV(expr.args, expr.body, env)
+        } else if (expr instanceof AppC){
+            
         }
         // Additional cases can be handled here in the future
         return null
@@ -65,20 +69,25 @@ class TestRunner {
 
         // If test case
         // if (condition) then 37 else 0
-        If ifExpr = new If(new IdC('true'), new NumC(37), new NumC(0))
+        IfC ifExpr = new IfC(new IdC('true'), new NumC(37), new NumC(0))
         Value ifResult = interp(ifExpr, env)
-        println "If Test: Expected NumV(37), ${ifResult instanceof NumV && ifResult.n == 37 ? 'Pass' : 'Fail'}"
+        println "IfC Test: Expected NumV(37), ${ifResult instanceof NumV && ifResult.n == 37 ? 'Pass' : 'Fail'}"
         
         
         // If test case with false condition
         // Update environment to test false condition
         env.bind('condition', new BoolV(false)) // Update condition to false for this test
-        If ifFalseExpr = new If(new IdC('condition'), new NumC(66), new NumC(0))
+        IfC ifFalseExpr = new IfC(new IdC('condition'), new NumC(66), new NumC(0))
         Value ifFalseResult = interp(ifFalseExpr, env)
-        println "If False Test: Expected NumV(0), ${ifFalseResult instanceof NumV && ifFalseResult.n == 0 ? 'Pass' : 'Fail'}"
+        println "IfC False Test: Expected NumV(0), ${ifFalseResult instanceof NumV && ifFalseResult.n == 0 ? 'Pass' : 'Fail'}"
 
+        // LamC test case
+        LamC lamExpr = new LamC([new NumC(1)], new NumC(1))
+        Value lamResult = interp(lamExpr, env)
+        println "LamC Test: Expected CloV(), ${lamResult instanceof CloV && lamResult.body instanceof NumC ? 'Pass' : 'Fail'}"
 
-    
+        //AppC Test
+        
         // Additional test cases can be added here
     }
 
@@ -121,12 +130,12 @@ class IdC extends ExprC {
 }
 
 // Represents an if expression
-class If extends ExprC {
+class IfC extends ExprC {
     ExprC test
     ExprC thenBranch
     ExprC elseBranch
     
-    If(ExprC test, ExprC thenBranch, ExprC elseBranch) {
+    IfC(ExprC test, ExprC thenBranch, ExprC elseBranch) {
         this.test = test
         this.thenBranch = thenBranch
         this.elseBranch = elseBranch
