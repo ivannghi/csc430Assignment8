@@ -26,11 +26,88 @@ class TestRunner {
         } else if (expr instanceof LamC){
             return new CloV(expr.args, expr.body, env)
         } else if (expr instanceof AppC){
-            
+            Value funVal = interp(app.fun, env);
+            List<Value> argVals = new ArrayList<>();
+            for (ExprC arg : app.args) {
+                 argVals.add(interp(arg, env));
+            }
+            if (funVal instanceof CloV) {
+                CloV cloVal = (CloV) funVal;
+                List<String> lamArgs = cloVal.args;
+                if (lamArgs.size() == argVals.size()) {
+                    Env newEnv = new Env();
+                    for (int i = 0; i < lamArgs.size(); i++) {
+                        newEnv.bind(lamArgs.get(i), argVals.get(i));
+                    }
+                    return interp(cloVal.body, newEnv);
+                } else {
+                    throw new RuntimeException("OAZO: Incorrect number of arguments");
+                }
+            } else if (funVal instanceof PrimV) {
+                PrimV primVal = (PrimV) funVal;
+                return interpPrimitive(primVal.op, argVals, env);
+            } else {
+                throw new RuntimeException("OAZO: Cannot apply to type " + funVal.getClass().getName());
+            }
+}
         }
         // Additional cases can be handled here in the future
         return null
     }
+    static Value interpPrimitive(String op, List<Value> args, Env env) {
+    switch (op) {
+        case "+":
+            if (args.size() == 2 && args.get(0) instanceof NumV && args.get(1) instanceof NumV) {
+                double a = ((NumV) args.get(0)).n;
+                double b = ((NumV) args.get(1)).n;
+                return new NumV(a + b);
+            } else {
+                throw new RuntimeException("OAZO: Incorrect for +");
+            }
+        case "-":
+            if (args.size() == 2 && args.get(0) instanceof NumV && args.get(1) instanceof NumV) {
+                double a = ((NumV) args.get(0)).n;
+                double b = ((NumV) args.get(1)).n;
+                return new NumV(a - b);
+            } else {
+                throw new RuntimeException("OAZO: Incorrect arguments for -");
+            }
+        case "*":
+            if (args.size() == 2 && args.get(0) instanceof NumV && args.get(1) instanceof NumV) {
+                double a = ((NumV) args.get(0)).n;
+                double b = ((NumV) args.get(1)).n;
+                return new NumV(a * b);
+            } else {
+                throw new RuntimeException("OAZO: Incorrect arguments for *");
+            }
+        case "/":
+           if (args.size() == 2 && args.get(0) instanceof NumV && args.get(1) instanceof NumV) {
+                double a = ((NumV) args.get(0)).n;
+                double b = ((NumV) args.get(1)).n;
+                if( b == 0){
+                    throw new RuntimeException("OAZO: Divide by zero error")
+                }else{
+                return new NumV(a / b);
+                }
+            } else {
+                throw new RuntimeException("OAZO: Incorrect arguments for *");
+            }
+        case "equal?":
+            // Implementation for equal?
+        case "<=":
+            if (args.size() == 2 && args.get(0) instanceof NumV && args.get(1) instanceof NumV) {
+                double a = ((NumV) args.get(0)).n;
+                double b = ((NumV) args.get(1)).n;
+                return new BoolV(a <= b);
+            } else {
+                throw new RuntimeException("OAZO: Incorrect arguments for *");
+            }
+        case "error":
+            // Implementation for error
+        default:
+            throw new RuntimeException("OAZO: Undefined primitive operation: " + op);
+    }
+}
 
     //Serialize Values to String
     static String serialize(Value v) {
