@@ -1,6 +1,6 @@
+package org.junit
+import org.junit.IdC
 
-import org.junit.Test
-import static org.junit.Assert.*
 
 // Example Test Runner Class
 class TestRunner {
@@ -32,6 +32,29 @@ class TestRunner {
         return null
     }
 
+    //Serialize Values to String
+    static String serialize(Value v) {
+        if (v instanceof NumV){
+            return Double.toString(v.n)
+        } else if (v instanceof StrV){
+            return v.str
+            // Might have to return string in different format
+        } else if (v instanceof BoolV){
+            if (v.bool == false){
+                return "false"
+            } else {
+                return "true"
+            }
+        } else if (v instanceof PrimV) {
+            return "#<primop>"
+        } else if (v instanceof CloV) {
+            return "#<procedure>"
+        }
+    }
+
+    static String topInterp(ExprC expr, env){
+        return serialize(interp(expr, env))
+    }
 
     static void main(String[] args) {
         // Initialize the top-level environment
@@ -88,21 +111,87 @@ class TestRunner {
 
         //AppC Test
         
+
+
+        //Serialize test cases
+        //NumV serialize test case
+        NumV numValue = new NumV(1.0)
+        String serResult1 = serialize(numValue)
+        println "Serialize Test (NumV): Expected '1.0' , ${serResult1 == "1.0" ? 'Pass' : 'Fail'}"
+
+        //StrV serialize test case
+        StrV strValue = new StrV("test")
+        String serResult2 = serialize(strValue)
+        println "Serialize Test (StrV): Expected 'test' , ${serResult2 == "test" ? 'Pass' : 'Fail'}"
+        
+        //BoolV serialize test case true
+        BoolV boolValue = new BoolV(true)
+        String serResult3 = serialize(boolValue)
+        println "Serialize Test (BoolV): Expected 'true' , ${serResult3 == 'true' ? 'Pass' : 'Fail'}"
+
+        //BoolV serialize test case false
+        BoolV boolValue2 = new BoolV(false)
+        String serResult4 = serialize(boolValue2)
+        println "Serialize Test (BoolV): Expected 'false' , ${serResult4 == 'false' ? 'Pass' : 'Fail'}"
+
+        //PrimV serialize test case
+        PrimV primValue = new PrimV("+")
+        String serResult5 = serialize(primValue)
+        println "Serialize Test (PrimV): Expected '#<primop>' , ${serResult5 == '#<primop>' ? 'Pass' : 'Fail'}"
+
+        //CloV serialize test case
+        CloV cloValue = new CloV(["x"], new AppC(new IdC('f'), [new IdC('x')]), env)
+        String serResult6 = serialize(cloValue)
+        println "Serialize Test (CloV): Expected '#<procedure>' , ${serResult6 == '#<procedure>' ? 'Pass' : 'Fail'}"
+    
+        //Top-interp test cases
+        // NumC test case
+        NumC numExp = new NumC(26)
+        String res1 = topInterp(numExp, env)
+        println "NumC Test: Expected '26.0', ${res1 == "26.0" ? 'Pass' : 'Fail'}"
+    
+        // StrC test case
+        StrC strExp = new StrC("hello world")
+        String res2 = topInterp(strExp, env)
+        println "StrC Test: Expected 'hello world', ${res2 == 'hello world' ? 'Pass' : 'Fail'}"
+        
+        // IdC test case
+        IdC idExp = new IdC('+')
+        String idRes = topInterp(idExp, env)
+        println "IdC Test: Expected '#<primop>', ${idRes == "#<primop>" ? 'Pass' : 'Fail'}"
+
+        // If test case
+        // if (condition) then 37 else 0
+        IfC ifExp = new IfC(new IdC('true'), new NumC(37), new NumC(0))
+        String ifRes = topInterp(ifExp, env)
+        println "IfC Test: Expected NumV(37), ${ifRes == "37.0" ? 'Pass' : 'Fail'}"
+        
+        
+        // If test case with false condition
+        // Update environment to test false condition
+        env.bind('condition', new BoolV(false)) // Update condition to false for this test
+        IfC ifFalseExp = new IfC(new IdC('condition'), new NumC(66), new NumC(0))
+        String ifFalseRes = topInterp(ifFalseExp, env)
+        println "IfC False Test: Expected '0.0'', ${ifFalseRes == "0.0" ? 'Pass' : 'Fail'}"
+
+        // LamC test case
+        LamC lamExp = new LamC([new NumC(1)], new NumC(1))
+        String lamRes = topInterp(lamExp, env)
+        println "LamC Test: Expected '#<procedure>', ${lamRes == "#<procedure>" ? 'Pass' : 'Fail'}"
+
         // Additional test cases can be added here
+            
     }
-
 }
-
-
 
 // Base class for expression types
 abstract class ExprC {}
 
 // Represents a numeric constant
 class NumC extends ExprC {
-    Integer n
+    double n
     
-    NumC(Integer n) {
+    NumC(double n) {
         this.n = n
     }
 }
@@ -153,7 +242,6 @@ class AppC extends ExprC {
     }
 }
 
-
 // Represents a lambda expression
 class LamC extends ExprC {
     List<String> args
@@ -173,9 +261,6 @@ class StrC extends ExprC {
         this.str = str
     }
 }
-
-
-
 
 // Base class for value types
 abstract class Value {}
