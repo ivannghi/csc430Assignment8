@@ -1,6 +1,53 @@
 package org.junit
 import org.junit.IdC
 
+static Value interp(ExprC expr, Env env) {
+    if (expr instanceof NumC) {
+            return new NumV(expr.n)
+        } else if (expr instanceof StrC) {
+            return new StrV(expr.str)
+        } else if (expr instanceof IdC){
+            return env.lookup(expr.x)
+        } else if (expr instanceof IfC) {
+            Value testVal = interp(expr.test, env)
+            if (testVal instanceof BoolV) {
+                if (testVal.bool) {
+                    return interp(expr.thenBranch, env)
+                } else {
+                    return interp(expr.elseBranch, env)
+                }
+            } else {
+                throw new RuntimeException("Expected boolean value for test expression")
+            }
+        } else if (expr instanceof LamC){
+            return new CloV(expr.args, expr.body, env)
+        } else if (expr instanceof AppC){
+            Value funVal = interp(expr.f, env);
+            List<Value> argVals = new ArrayList<>();
+            for (ExprC arg : expr.p) {
+                argVals.add(interp(arg, env));
+            }
+            if (funVal instanceof CloV) {
+                CloV cloVal = (CloV) funVal;
+                List<String> lamArgs = cloVal.args;
+                if (lamArgs.size() == argVals.size()) {
+                    Env newEnv = new Env();
+                    for (int i = 0; i < lamArgs.size(); i++) {
+                        newEnv.bind(lamArgs.get(i), argVals.get(i));
+                    }
+                    return interp(cloVal.body, newEnv);
+                } else {
+                    throw new RuntimeException("OAZO: Incorrect number of arguments");
+                }
+            } else if (funVal instanceof PrimV) {
+                PrimV primVal = (PrimV) funVal;
+                return interpPrimitive(primVal.op, argVals, env);
+            } else {
+                throw new RuntimeException("OAZO: Cannot apply to type " + funVal.getClass().getName());
+            }
+        }
+}
+
 
 // Example Test Runner Class
 class TestRunner {
@@ -26,10 +73,10 @@ class TestRunner {
         } else if (expr instanceof LamC){
             return new CloV(expr.args, expr.body, env)
         } else if (expr instanceof AppC){
-            Value funVal = interp(app.fun, env);
+            Value funVal = interp(expr.f, env);
             List<Value> argVals = new ArrayList<>();
-            for (ExprC arg : app.args) {
-                 argVals.add(interp(arg, env));
+            for (ExprC arg : expr.p) {
+                argVals.add(interp(arg, env));
             }
             if (funVal instanceof CloV) {
                 CloV cloVal = (CloV) funVal;
@@ -49,11 +96,11 @@ class TestRunner {
             } else {
                 throw new RuntimeException("OAZO: Cannot apply to type " + funVal.getClass().getName());
             }
-}
         }
-        // Additional cases can be handled here in the future
-        return null
+
+        }
     }
+    
     static Value interpPrimitive(String op, List<Value> args, Env env) {
     switch (op) {
         case "+":
@@ -85,7 +132,7 @@ class TestRunner {
                 double a = ((NumV) args.get(0)).n;
                 double b = ((NumV) args.get(1)).n;
                 if( b == 0){
-                    throw new RuntimeException("OAZO: Divide by zero error")
+                    throw new RuntimeException("OAZO: Divide by zero error");
                 }else{
                 return new NumV(a / b);
                 }
@@ -93,7 +140,26 @@ class TestRunner {
                 throw new RuntimeException("OAZO: Incorrect arguments for *");
             }
         case "equal?":
-            // Implementation for equal?
+            if (args.size() == 2) {
+                Value val1 = args.get(0);
+                Value val2 = args.get(1);
+                if (val1.getClass() == val2.getClass()) {
+                    if (val1 instanceof NumV) {
+                        return new BoolV(((NumV) val1).n == ((NumV) val2).n);
+                    } else if (val1 instanceof StrV) {
+                        return new BoolV(((StrV) val1).str.equals(((StrV) val2).str));
+                    } else if (val1 instanceof BoolV) {
+                        return new BoolV(((BoolV) val1).bool == ((BoolV) val2).bool);
+                    } else {
+                        // For CloV and PrimV, consider them equal only if they refer to the same object (reference equality)
+                        return new BoolV(val1 == val2);
+                    }
+                } else {
+                    return new BoolV(false);
+                }
+            } else {
+                throw new RuntimeException("OAZO: Incorrect number of arguments for equal?");
+            }
         case "<=":
             if (args.size() == 2 && args.get(0) instanceof NumV && args.get(1) instanceof NumV) {
                 double a = ((NumV) args.get(0)).n;
@@ -104,6 +170,13 @@ class TestRunner {
             }
         case "error":
             // Implementation for error
+            if (args.size() == 1) {
+                Value v = args.get(0);
+                String errorMessage = "user-error: " + serialize(v);
+                throw new RuntimeException(errorMessage);
+            } else {
+                throw new RuntimeException("OAZO: Incorrect number of arguments for error");
+            }
         default:
             throw new RuntimeException("OAZO: Undefined primitive operation: " + op);
     }
@@ -186,8 +259,56 @@ class TestRunner {
         Value lamResult = interp(lamExpr, env)
         println "LamC Test: Expected CloV(), ${lamResult instanceof CloV && lamResult.body instanceof NumC ? 'Pass' : 'Fail'}"
 
-        //AppC Test
-        
+        //AppC Tests
+        LamC helloWorld = new LamC([], new StrC("Hello, world!"))
+        AppC helloWorldApp = new AppC(helloWorld, [])
+        Value helloWorldResult = interp(helloWorldApp, env)
+        println "AppC Test 1: Expected StrV('Hello, world!'), ${helloWorldResult instanceof StrV && helloWorldResult.str == 'Hello, world!' ? 'Pass' : 'Fail'}"
+
+        Value identityResult = interp(new AppC(new IdC("equal?"), [new NumC(5), new NumC(5)]), env)
+        println "AppC Test 2: Expected BoolV, ${identityResult instanceof BoolV ? 'Pass' : 'Fail'}"
+
+        Value identityResult2 = interp(new AppC(new IdC("equal?"), [new NumC(5), new NumC(999)]), env)
+        println "AppC Test 2: Expected BoolV, ${identityResult2 instanceof BoolV ? 'Pass' : 'Fail'}"
+
+        // Test case for addition
+        AppC additionApp = new AppC(new IdC('+'), [new NumC(10), new NumC(5)])
+        Value additionResult = interp(additionApp, env)
+        println "AppC Addition Test: Expected NumV(15), ${additionResult instanceof NumV && additionResult.n == 15 ? 'Pass' : 'Fail'}"
+
+        // Test case for subtraction
+        AppC subtractionApp = new AppC(new IdC('-'), [new NumC(10), new NumC(5)])
+        Value subtractionResult = interp(subtractionApp, env)
+        println "AppC Subtraction Test: Expected NumV(5), ${subtractionResult instanceof NumV && subtractionResult.n == 5 ? 'Pass' : 'Fail'}"
+
+        // Test case for multiplication
+        AppC multiplicationApp = new AppC(new IdC('*'), [new NumC(10), new NumC(5)])
+        Value multiplicationResult = interp(multiplicationApp, env)
+        println "AppC Multiplication Test: Expected NumV(50), ${multiplicationResult instanceof NumV && multiplicationResult.n == 50 ? 'Pass' : 'Fail'}"
+
+        // Test case for division
+        AppC divisionApp = new AppC(new IdC('/'), [new NumC(10), new NumC(2)])
+        Value divisionResult = interp(divisionApp, env)
+        println "AppC Division Test: Expected NumV(5), ${divisionResult instanceof NumV && divisionResult.n == 5 ? 'Pass' : 'Fail'}"
+
+        // Test case for equality
+        AppC equalityApp = new AppC(new IdC('equal?'), [new NumC(10), new NumC(10)])
+        Value equalityResult = interp(equalityApp, env)
+        println "AppC Equality Test: Expected BoolV(true), ${equalityResult instanceof BoolV && equalityResult.bool == true ? 'Pass' : 'Fail'}"
+
+        // Test case for less than or equal to
+        AppC lessThanOrEqualApp = new AppC(new IdC('<='), [new NumC(10), new NumC(5)])
+        Value lessThanOrEqualResult = interp(lessThanOrEqualApp, env)
+        println "AppC Less Than Or Equal Test: Expected BoolV(false), ${lessThanOrEqualResult instanceof BoolV && lessThanOrEqualResult.bool == false ? 'Pass' : 'Fail'}"
+
+        // Test case for error
+        AppC errorApp = new AppC(new IdC('error'), [new StrC("An error occurred")])
+        try {
+            interp(errorApp, env)
+            println "AppC Error Test: Fail - Expected an error but did not throw"
+        } catch (RuntimeException e) {
+            println "AppC Error Test: Pass"
+        }
 
 
         //Serialize test cases
@@ -256,10 +377,45 @@ class TestRunner {
         String lamRes = topInterp(lamExp, env)
         println "LamC Test: Expected '#<procedure>', ${lamRes == "#<procedure>" ? 'Pass' : 'Fail'}"
 
-        // Additional test cases can be added here
+        // Test case for equal? with two equal values
+        Value equalTest1 = interp(new AppC(new IdC("equal?"), [new NumC(5), new NumC(5)]), env)
+        println "Equal Test 1: Expected true, ${equalTest1 instanceof BoolV && equalTest1.bool == true ? 'Pass' : 'Fail'}"
+
+        // Test case for equal? with two unequal values
+        Value equalTest2 = interp(new AppC(new IdC("equal?"), [new StrC("hello"), new StrC("world")]), env)
+        println "Equal Test 2: Expected false, ${equalTest2 instanceof BoolV && equalTest2.bool == false ? 'Pass' : 'Fail'}"
+
+        // Test case for equal? with a closure value
+        Value equalTest3 = interp(new AppC(new IdC("equal?"), [new LamC([], new NumC(1)), new LamC([], new NumC(1))]), env)
+        println "Equal Test 3: Expected false, ${equalTest3 instanceof BoolV && equalTest3.bool == false ? 'Pass' : 'Fail'}"
+        
+        // Test case for error with a value
+        try {
+            interp(new AppC(new IdC("error"), [new NumC(42)]), env)
+            println "Error Test 1: Fail - Expected an error but did not throw"
+        } catch (RuntimeException e) {
+            if (e.getMessage().startsWith("user-error: ")) {
+                println "Error Test 1: Pass"
+            } else {
+                println "Error Test 1: Fail - Expected error message format is incorrect"
+            }
+        }
+
+        // Test case for error with a string value
+        try {
+            interp(new AppC(new IdC("error"), [new StrC("Error message")])), env
+            println "Error Test 2: Fail - Expected an error but did not throw"
+        } catch (RuntimeException e) {
+            if (e.getMessage().startsWith("user-error: ")) {
+                println "Error Test 2: Pass"
+            } else {
+                println "Error Test 2: Fail - Expected error message format is incorrect"
+            }
+}
+
+
             
     }
-}
 
 // Base class for expression types
 abstract class ExprC {}
@@ -408,10 +564,5 @@ class Env {
         return bindings.getOrDefault(name, null)
     }
 }
-
-
-
-
-
 
 
